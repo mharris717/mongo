@@ -116,6 +116,14 @@ namespace mongo {
             const char *fieldName,
             const BSONElement& toMatch, const BSONObj& obj,
             int compareOp, const BasicMatcher& bm, bool isArr = false);
+            
+        int matchesDotted(
+            const char *fieldName,
+            const BSONElement& toMatch, const list<BSONObj>& objList,
+            int compareOp, const BasicMatcher& bm, bool isArr = false);
+            
+        int matchesDottedSingleField(const BSONElement& e, const BSONElement& toMatch, int compareOp, const BasicMatcher& bm, bool indexed);
+        int matchesDottedSingleField(const list<BSONElement>& elList, const BSONElement& toMatch, int compareOp, const BasicMatcher& bm, bool indexed);
 
         int matchesNe(
             const char *fieldName,

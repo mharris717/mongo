@@ -777,6 +777,9 @@ namespace mongo {
         BSONElement getField(const string name) const {
             return getField( name.c_str() );
         };
+        
+        int getFieldValueObjs(list<BSONObj>& objList) const;
+        int getFieldValueObjs(list<BSONElement>& elList) const;
 
         /** Get the field of the specified name. eoo() is true on the returned 
             element if not found. 

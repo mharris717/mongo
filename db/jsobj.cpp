@@ -873,26 +873,50 @@ namespace mongo {
         if( deep )
             *deep = true;
     }
+    
+    bool isWildcard(const char* str) {
+        return (strcmp(str,"*") == 0);
+    }
+    void addFieldsDotted(const char* p, const BSONElement& e, BSONElementSet& ret, bool *deep) {
+        if ( e.type() == Array ) {
+            trueDat( deep );
+            BSONObjIterator i( e.embeddedObject() );
+            while( i.moreWithEOO() ) {
+                BSONElement f = i.next();
+                if ( f.eoo() )
+                    break;
+                if ( f.type() == Object )
+                    f.embeddedObject().getFieldsDotted(p+1, ret);
+            }
+        } else if ( e.type() == Object ) {
+            e.embeddedObject().getFieldsDotted(p+1, ret);
+        }
+    }
 
     void BSONObj::getFieldsDotted(const char *name, BSONElementSet &ret, bool *deep ) const {
+        if (isWildcard(name)) {
+            list<BSONElement> elList;
+            getFieldValueObjs(elList);
+            for( list<BSONElement>::const_iterator i = elList.begin(); i != elList.end(); ++i ) {
+                ret.insert(*i);
+            }
+            return;
+        }
         BSONElement e = getField( name );
         if ( e.eoo() ) {
             const char *p = strchr(name, '.');
             if ( p ) {
                 string left(name, p-name);
-                BSONElement e = getField( left );
-                if ( e.type() == Array ) {
-                    trueDat( deep );
-                    BSONObjIterator i( e.embeddedObject() );
-                    while( i.moreWithEOO() ) {
-                        BSONElement f = i.next();
-                        if ( f.eoo() )
-                            break;
-                        if ( f.type() == Object )
-                            f.embeddedObject().getFieldsDotted(p+1, ret);
+                if (isWildcard(left.c_str())) {
+                    list<BSONElement> elList;
+                    getFieldValueObjs(elList);
+                    for( list<BSONElement>::const_iterator i = elList.begin(); i != elList.end(); ++i ) {
+                        addFieldsDotted(p,*i,ret,deep);
                     }
-                } else if ( e.type() == Object ) {
-                    e.embeddedObject().getFieldsDotted(p+1, ret);
+                }
+                else {
+                    BSONElement e = getField( left );
+                    addFieldsDotted(p,e,ret,deep);
                 }
             }
         } else {
@@ -1075,6 +1099,35 @@ namespace mongo {
             if ( e.eoo() )
                 break;
             fields.insert(e.fieldName());
+            n++;
+        }
+        return n;
+    }
+    
+    int BSONObj::getFieldValueObjs(list<BSONObj>& objList) const {
+        int n = 0;
+        BSONObjIterator i(*this);
+        while ( i.moreWithEOO() ) {
+            BSONElement e = i.next();
+            if ( e.eoo() )
+                break;
+            if ( e.type() == Object ) {
+                BSONObj obj = e.embeddedObject();
+                objList.push_back(obj);
+                n++;
+            }
+        }
+        return n;
+    }
+    
+    int BSONObj::getFieldValueObjs(list<BSONElement>& elList) const {
+        int n = 0;
+        BSONObjIterator i(*this);
+        while ( i.moreWithEOO() ) {
+            BSONElement e = i.next();
+            if ( e.eoo() )
+                break;
+            elList.push_back(e);
             n++;
         }
         return n;

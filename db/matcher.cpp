@@ -354,7 +354,6 @@ namespace mongo {
         1 match
     */
     int JSMatcher::matchesDotted(const char *fieldName, const BSONElement& toMatch, const BSONObj& obj, int compareOp, const BasicMatcher& bm , bool isArr) {
-
         if ( compareOp == BSONObj::opALL ) {
             if ( bm.myset->size() == 0 )
                 return -1; // is this desired?
@@ -412,20 +411,41 @@ namespace mongo {
             const char *p = strchr(fieldName, '.');
             if ( p ) {
                 string left(fieldName, p-fieldName);
+                if (Helpers::isWildcard(left.c_str())) {
+                    list<BSONObj> objList;
+                    obj.getFieldValueObjs(objList);
+                    return matchesDotted(p+1, toMatch, objList, compareOp, bm, false);
+                }
+                else {
+                    BSONElement se = obj.getField(left.c_str());
+                    if ( se.eoo() )
+                        return retMissing( bm );
+                    if ( se.type() != Object && se.type() != Array )
+                        return retMissing( bm );
 
-                BSONElement se = obj.getField(left.c_str());
-                if ( se.eoo() )
-                    return retMissing( bm );
-                if ( se.type() != Object && se.type() != Array )
-                    return retMissing( bm );
-
-                BSONObj eo = se.embeddedObject();
-                return matchesDotted(p+1, toMatch, eo, compareOp, bm, se.type() == Array);
+                    BSONObj eo = se.embeddedObject();
+                    return matchesDotted(p+1, toMatch, eo, compareOp, bm, se.type() == Array); //get the first field, pass to func and match remainder
+                }
+                
             } else {
-                e = obj.getField(fieldName);
+                if (Helpers::isWildcard(fieldName)) {
+                    list<BSONElement> elList;
+                    obj.getFieldValueObjs(elList);
+                    return matchesDottedSingleField(elList,toMatch,compareOp,bm,indexed);
+                }
+                else {
+                    e = obj.getField(fieldName);
+                    return matchesDottedSingleField(e,toMatch,compareOp,bm,indexed);
+                }
             }
         }
+        assert(false);
+        return -1;
 
+
+    }
+    
+    int JSMatcher::matchesDottedSingleField(const BSONElement& e, const BSONElement& toMatch, int compareOp, const BasicMatcher& bm, bool indexed) {
         if ( compareOp == BSONObj::opEXISTS ) {
             return ( e.eoo() ^ toMatch.boolean() ) ? 1 : -1;
         } else if ( ( e.type() != Array || indexed || compareOp == BSONObj::opSIZE ) &&
@@ -447,6 +467,26 @@ namespace mongo {
             return 0;
         }
         return -1;
+    }
+    
+    int JSMatcher::matchesDottedSingleField(const list<BSONElement>& elList, const BSONElement& toMatch, int compareOp, const BasicMatcher& bm, bool indexed) {
+        int res = -99;
+        for( list< BSONElement>::const_iterator i = elList.begin(); i != elList.end(); ++i ) {
+            int temp = matchesDottedSingleField(*i,toMatch,compareOp,bm,indexed);
+            if(temp > res) res = temp;
+            if (res == 1) return 1;
+        }
+        return res;
+    }
+    
+    int JSMatcher::matchesDotted(const char *fieldName, const BSONElement& toMatch, const list<BSONObj>& objList, int compareOp, const BasicMatcher& bm , bool isArr) {
+        int res = -99;
+        for( list< BSONObj>::const_iterator i = objList.begin(); i != objList.end(); ++i ) {
+            int temp = matchesDotted(fieldName,toMatch,*i,compareOp,bm,isArr);
+            if(temp > res) res = temp;
+            if (res == 1) return 1;
+        }
+        return res;
     }
 
     extern int dump;

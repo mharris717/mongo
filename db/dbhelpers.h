@@ -93,6 +93,7 @@ namespace mongo {
         You do not need to set the database before calling.
         */
         static void emptyCollection(const char *ns);
+        static bool isWildcard(const char* str);
 
     };
 

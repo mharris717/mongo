@@ -190,6 +190,10 @@ namespace mongo {
         DBContext context(ns);
         deleteObjects(ns, BSONObj(), false);
     }
+    
+    bool Helpers::isWildcard(const char* str) {
+        return (strcmp(str,"*") == 0);
+    }
 
     DbSet::~DbSet() {
         if ( name_.empty() )
