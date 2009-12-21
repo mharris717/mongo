@@ -873,26 +873,54 @@ namespace mongo {
         if( deep )
             *deep = true;
     }
+    
+    bool isWildcard(const char* str) {
+        return (strcmp(str,"*") == 0);
+    }
+    void addFieldsDotted(const char* p, const BSONElement& e, BSONElementSet& ret, bool *deep) {
+        if ( e.type() == Array ) {
+            trueDat( deep );
+            BSONObjIterator i( e.embeddedObject() );
+            while( i.moreWithEOO() ) {
+                BSONElement f = i.next();
+                if ( f.eoo() )
+                    break;
+                if ( f.type() == Object )
+                    f.embeddedObject().getFieldsDotted(p+1, ret);
+            }
+        } else if ( e.type() == Object ) {
+            e.embeddedObject().getFieldsDotted(p+1, ret);
+        }
+    }
 
     void BSONObj::getFieldsDotted(const char *name, BSONElementSet &ret, bool *deep ) const {
+        if (isWildcard(name)) {
+            BSONObjIterator i(*this);
+            while (i.moreWithEOO()) {
+                BSONElement e = i.next();
+                if (e.eoo())
+                    break;
+                ret.insert(e);
+            }
+            return;
+        }
         BSONElement e = getField( name );
         if ( e.eoo() ) {
             const char *p = strchr(name, '.');
             if ( p ) {
                 string left(name, p-name);
-                BSONElement e = getField( left );
-                if ( e.type() == Array ) {
-                    trueDat( deep );
-                    BSONObjIterator i( e.embeddedObject() );
-                    while( i.moreWithEOO() ) {
-                        BSONElement f = i.next();
-                        if ( f.eoo() )
+                if (isWildcard(left.c_str())) {
+                    BSONObjIterator i(*this);
+                    while (i.moreWithEOO()) {
+                        BSONElement e = i.next();
+                        if (e.eoo())
                             break;
-                        if ( f.type() == Object )
-                            f.embeddedObject().getFieldsDotted(p+1, ret);
+                        addFieldsDotted(p,e,ret,deep);
                     }
-                } else if ( e.type() == Object ) {
-                    e.embeddedObject().getFieldsDotted(p+1, ret);
+                }
+                else {
+                    BSONElement e = getField( left );
+                    addFieldsDotted(p,e,ret,deep);
                 }
             }
         } else {
